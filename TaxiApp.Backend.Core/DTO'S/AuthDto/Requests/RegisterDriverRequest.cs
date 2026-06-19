@@ -25,7 +25,6 @@ namespace TaxiApp.Backend.Core.DTO_S.AuthDto.Requests
 
 
         public string? Address { get; set; }
-        public string? ProfilePhotoUrl { get; set; }
 
 
 

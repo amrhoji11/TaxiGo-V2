@@ -36,9 +36,7 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             if (!string.IsNullOrWhiteSpace(request.LastName))
                 user.LastName = request.LastName;
 
-            // تعديل رقم الهاتف
-            if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
-                user.PhoneNumber = request.PhoneNumber;
+           
 
             var updateResult = await userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)

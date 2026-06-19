@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using System.Security.Claims;
+using TaxiApp.Backend.Core.DTO_S;
 using TaxiApp.Backend.Core.DTO_S.AuthDto;
 using TaxiApp.Backend.Core.DTO_S.AuthDto.Requests;
 using TaxiApp.Backend.Core.Interfaces;
@@ -44,6 +45,22 @@ namespace TaxiApp.Backend.Api.Controllers
             return Ok(response);
         }
 
+            [HttpPost("confirm-register-passenger")]
+            public async Task<IActionResult> ConfirmPassenger([FromBody] ConfirmOtpRequest request)
+            {
+                var response = await _authRepository.ConfirmPassengerRegisterAsync(
+                    request.CountryCode,
+                    request.PhoneNumber,
+                    request.Otp
+                );
+
+                if (response.Message.Contains("فشل") || response.Message.Contains("انتهت"))
+                    return BadRequest(response);
+
+                return Ok(response);
+            }
+        
+
         [HttpPost("registerDriver")]
         public async Task<IActionResult> RegisterDriver([FromBody] RegisterDriverRequest request)
         {
@@ -56,6 +73,22 @@ namespace TaxiApp.Backend.Api.Controllers
             // الآن ستجد البيانات في قاعدة البيانات
             return Ok(response);
         }
+
+        [HttpPost("confirm-register-driver")]
+        public async Task<IActionResult> ConfirmDriver([FromBody] ConfirmOtpRequest request)
+        {
+            var response = await _authRepository.ConfirmDriverRegisterAsync(
+                request.CountryCode,
+                request.PhoneNumber,
+                request.Otp
+            );
+
+            if (response.Message.Contains("فشل") || response.Message.Contains("انتهت"))
+                return BadRequest(response);
+
+            return Ok(response);
+        }
+
         // 1. طلب تسجيل الدخول (يرسل الرمز للهاتف)
         [EnableRateLimiting("LoginPolicy")]
         [HttpPost("login")]

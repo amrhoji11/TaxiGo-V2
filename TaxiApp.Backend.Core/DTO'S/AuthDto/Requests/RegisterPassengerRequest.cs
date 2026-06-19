@@ -22,7 +22,8 @@ namespace TaxiApp.Backend.Core.DTO_S.AuthDto
         [RegularExpression(@"^\d{9,10}$", ErrorMessage = "رقم الهاتف غير صحيح")]
         public string PhoneNumber { get; set; }
 
-        public string? ProfilePhotoUrl { get; set; }
+        public string? Address { get; set; }
+
 
 
 

@@ -58,7 +58,7 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             this._cache = cache;
             this.adminAssignmentRepository = adminAssignmentRepository;
             this.settingsRepository = settingsRepository;
-            _tripRoutingService = _tripRoutingService;
+           this. _tripRoutingService = _tripRoutingService;
         }
 
 

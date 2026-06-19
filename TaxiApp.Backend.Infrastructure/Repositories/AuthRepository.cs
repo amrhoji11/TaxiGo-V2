@@ -12,6 +12,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using TaxiApp.Backend.Core;
+using TaxiApp.Backend.Core.DTO_S;
 using TaxiApp.Backend.Core.DTO_S.AuthDto;
 using TaxiApp.Backend.Core.DTO_S.AuthDto.Requests;
 using TaxiApp.Backend.Core.DTO_S.AuthDto.Responses;
@@ -54,58 +55,107 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             var fullPhone = PhoneHelper.BuildInternationalPhone(request.CountryCode, request.PhoneNumber);
 
             var existingUser = await userManager.Users
-          .FirstOrDefaultAsync(u => u.PhoneNumber == fullPhone);
+                .FirstOrDefaultAsync(u => u.PhoneNumber == fullPhone);
 
             if (existingUser != null)
             {
                 return new RegisterPassengerResponse
                 {
-                    UserId = existingUser.Id,
-                    FullName = $"{existingUser.FirstName} {existingUser.LastName}",
-                    PhoneNumber = existingUser.PhoneNumber,
-                    Message = "رقم الهاتف مسجل مسبقاً، يرجى تسجيل الدخول."
+                    Message = "رقم الهاتف مسجل مسبقاً"
                 };
             }
 
-            var user = new ApplicationUser
+            // 🔥 OTP
+            var otp = new Random().Next(100000, 999999).ToString();
+
+            // 💾 تخزين البيانات مؤقتاً
+            var tempData = new TempRegisterData
             {
-                UserName = request.FirstName,
-                PhoneNumber = fullPhone,
                 FirstName = request.FirstName,
                 LastName = request.LastName,
-                CreatedAt = DateTime.UtcNow
+                FullPhone = fullPhone,
+                Address = request.Address
+            };
+
+            cache.Set($"register_temp_{fullPhone}", tempData, TimeSpan.FromMinutes(10));
+            cache.Set($"register_otp_{fullPhone}", otp, TimeSpan.FromMinutes(5));
+
+            // 📩 إرسال SMS
+            await smsService.SendSms(fullPhone, $"رمز التحقق: {otp}");
+
+            return  new RegisterPassengerResponse
+            {
+                Message = "تم إرسال رمز التحقق إلى هاتفك"
+            }; 
+        }
+
+        public async Task<RegisterPassengerResponse> ConfirmPassengerRegisterAsync(string countryCode, string phoneNumber, string otp)
+        {
+            var fullPhone = PhoneHelper.BuildInternationalPhone(countryCode, phoneNumber);
+
+            var cachedOtp = cache.Get<string>($"register_otp_{fullPhone}");
+            var tempData = cache.Get<TempRegisterData>($"register_temp_{fullPhone}");
+
+            if (cachedOtp == null || tempData == null)
+            {
+                return new RegisterPassengerResponse
+                {
+                    Message = "انتهت صلاحية رمز التحقق"
+                };
+            }
+
+            if (cachedOtp != otp)
+            {
+                return new RegisterPassengerResponse
+                {
+                    Message = "رمز التحقق غير صحيح"
+                };
+            }
+
+            // 🧠 إنشاء المستخدم فعليًا
+            var user = new ApplicationUser
+            {
+                UserName = tempData.FirstName,
+                PhoneNumber = fullPhone,
+                FirstName = tempData.FirstName,
+                LastName = tempData.LastName,
+                CreatedAt = DateTime.UtcNow,
+                Address = tempData.Address,
+                IsPhoneVerified = true
             };
 
             var result = await userManager.CreateAsync(user);
 
-            if (result.Succeeded)
+            if (!result.Succeeded)
             {
-                // ✅ إسناد دور الراكب للمستخدم
-                await userManager.AddToRoleAsync(user, "Passenger");
-
-                var passenger = new Passenger
-                {
-                    UserId = user.Id
-                };
-
-                _context.Passengers.Add(passenger);
-                await _context.SaveChangesAsync();
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
 
                 return new RegisterPassengerResponse
                 {
-                    UserId = user.Id,
-                    FullName = $"{user.FirstName} {user.LastName}",
-                    PhoneNumber = fullPhone,
-                    Message= "تم إنشاء الحساب بنجاح."
+                    Message = $"فشل إنشاء الحساب: {errors}"
                 };
             }
 
-            // إذا فشل الإنشاء، نضع كل الأخطاء في Message مفصلة
-            var errors = string.Join(", ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+            await userManager.AddToRoleAsync(user, "Passenger");
+
+            var passenger = new Passenger
+            {
+                UserId = user.Id
+            };
+
+            _context.Passengers.Add(passenger);
+            await _context.SaveChangesAsync();
+
+            // 🧹 تنظيف الكاش
+            cache.Remove($"register_temp_{fullPhone}");
+            cache.Remove($"register_otp_{fullPhone}");
 
             return new RegisterPassengerResponse
             {
-                Message = $"فشل إنشاء الحساب: {errors}"
+                UserId = user.Id,
+                FullName = $"{user.FirstName} {user.LastName}",
+                PhoneNumber = fullPhone,
+                Message = "تم إنشاء الحساب بنجاح"
             };
         }
 
@@ -114,70 +164,110 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
         {
             var fullPhone = PhoneHelper.BuildInternationalPhone(request.CountryCode, request.PhoneNumber);
 
-
             var existingUser = await userManager.Users
-        .FirstOrDefaultAsync(u => u.PhoneNumber == fullPhone);
+                .FirstOrDefaultAsync(u => u.PhoneNumber == fullPhone);
 
             if (existingUser != null)
             {
                 return new RegisterDriverResponse
                 {
-                    UserId = existingUser.Id,
-                    FullName = $"{existingUser.FirstName} {existingUser.LastName}",
-                    PhoneNumber = existingUser.PhoneNumber,
-                    Message = "رقم الهاتف مسجل مسبقاً، يرجى تسجيل الدخول."
+                    Message = "رقم الهاتف مسجل مسبقاً"
                 };
+            }
 
+            var otp = new Random().Next(100000, 999999).ToString();
+
+            var tempData = new TempRegisterData
+            {
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                FullPhone = fullPhone,
+                Address = request.Address
+            };
+
+            cache.Set($"register_driver_temp_{fullPhone}", tempData, TimeSpan.FromMinutes(10));
+            cache.Set($"register_driver_otp_{fullPhone}", otp, TimeSpan.FromMinutes(5));
+
+            await smsService.SendSms(fullPhone, $"رمز التحقق: {otp}");
+
+            return  new RegisterDriverResponse
+            {
+                Message = "تم إرسال رمز التحقق إلى هاتفك"
+            };
+        }
+
+        public async Task<RegisterDriverResponse> ConfirmDriverRegisterAsync(string countryCode, string phoneNumber, string otp)
+        {
+            var fullPhone = PhoneHelper.BuildInternationalPhone(countryCode, phoneNumber);
+
+            var cachedOtp = cache.Get<string>($"register_driver_otp_{fullPhone}");
+            var tempData = cache.Get<TempRegisterData>($"register_driver_temp_{fullPhone}");
+
+            if (cachedOtp == null || tempData == null)
+            {
+                return new RegisterDriverResponse
+                {
+                    Message = "انتهت صلاحية رمز التحقق"
+                };
+            }
+
+            if (cachedOtp != otp)
+            {
+                return new RegisterDriverResponse
+                {
+                    Message = "رمز التحقق غير صحيح"
+                };
             }
 
             var user = new ApplicationUser
             {
-                UserName = request.FirstName,
+                UserName = tempData.FirstName,
                 PhoneNumber = fullPhone,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                CreatedAt = DateTime.UtcNow
+                FirstName = tempData.FirstName,
+                LastName = tempData.LastName,
+                CreatedAt = DateTime.UtcNow,
+                IsPhoneVerified = true
             };
 
             var result = await userManager.CreateAsync(user);
 
-            if (result.Succeeded)
+            if (!result.Succeeded)
             {
-                // ✅ إسناد دور السائق للمستخدم
-                await userManager.AddToRoleAsync(user, "Driver");
-
-                var driver = new Driver
-                {
-                    UserId = user.Id,
-                    Status = DriverStatus.offline // السائق يبدأ بحالة معلق بانتظار الموافقة
-                };
-
-                // إنشاء Approval تلقائياً
-                var approval = new DriverApproval
-                {
-                    DriverId = user.Id,
-                    Status = ApprovalStatus.pending
-                };
-
-                _context.Drivers.Add(driver);
-                _context.DriverApprovals.Add(approval);
-                await _context.SaveChangesAsync();
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
 
                 return new RegisterDriverResponse
                 {
-                    UserId = user.Id,
-                    FullName = $"{user.FirstName} {user.LastName}",
-                    PhoneNumber = fullPhone,
-                    Message = "تم إنشاء الحساب بنجاح، بانتظار موافقة المكتب."
+                    Message = $"فشل إنشاء الحساب: {errors}"
                 };
             }
 
-            // إذا فشل الإنشاء، نضع كل الأخطاء في Message مفصلة
-            var errors = string.Join(", ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+            await userManager.AddToRoleAsync(user, "Driver");
+
+            var driver = new Driver
+            {
+                UserId = user.Id,
+                Status = DriverStatus.offline
+            };
+
+            var approval = new DriverApproval
+            {
+                DriverId = user.Id,
+                Status = ApprovalStatus.pending
+            };
+
+            _context.Drivers.Add(driver);
+            _context.DriverApprovals.Add(approval);
+            await _context.SaveChangesAsync();
+
+            cache.Remove($"register_driver_temp_{fullPhone}");
+            cache.Remove($"register_driver_otp_{fullPhone}");
 
             return new RegisterDriverResponse
             {
-                Message = $"فشل إنشاء الحساب: {errors}"
+                UserId = user.Id,
+                FullName = $"{user.FirstName} {user.LastName}",
+                PhoneNumber = fullPhone,
+                Message = "تم إنشاء حساب السائق بانتظار موافقة المكتب"
             };
         }
 

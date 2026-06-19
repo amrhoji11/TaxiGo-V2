@@ -25,6 +25,7 @@ namespace TaxiApp.Backend.Core.Models
         public bool IsDarkModeEnabled { get; set; } = false;
         public bool IsDeleted { get; set; } = false;
         public bool IsActive { get; set; } = true;
+        public bool IsPhoneVerified { get; set; } = false;
         public Passenger Passenger { get; set; }
         public Driver Driver { get; set; }
         public ICollection<Message> SentMessages { get; set; } = new List<Message>();
