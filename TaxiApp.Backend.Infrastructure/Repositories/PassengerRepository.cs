@@ -26,6 +26,26 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
 
        
 
+        public async Task<PassengerProfileDto?> GetMyProfileAsync(string userId)
+        {
+            var passenger = await context.Passengers
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.UserId == userId && !p.IsDeleted);
+
+            if (passenger == null) return null;
+
+            return new PassengerProfileDto
+            {
+                Id = passenger.UserId,
+                FirstName = passenger.User.FirstName,
+                LastName = passenger.User.LastName,
+                FullName = passenger.User.FirstName + " " + passenger.User.LastName,
+                Address = passenger.User.Address,
+                PhoneNumber = passenger.User.PhoneNumber,
+                ProfileImageUrl = passenger.ProfilePhotoUrl
+            };
+        }
+
         public async Task<bool> UpdatePassengerProfileAsync(string userId, UpdatePassengerRequest request)
         {
             var user = await userManager.FindByIdAsync(userId);

@@ -23,6 +23,18 @@ namespace TaxiApp.Backend.Api.Controllers
         }
 
 
+        [HttpGet]
+        public async Task<IActionResult> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (userId == null)
+                return Unauthorized();
+
+            var result = await notificationRepository.GetUserNotificationsAsync(userId, pageNumber, pageSize);
+            return Ok(result);
+        }
+
         [HttpPatch("mark-as-read/{id}")]
         public async Task<IActionResult> MarkAsRead(int id)
         {

@@ -22,6 +22,19 @@ namespace TaxiApp.Backend.Api.Controllers
             this.driverRepository = driverRepository;
         }
 
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var accessCheck = await CheckUserAccessAsync(userId);
+            if (accessCheck != null) return accessCheck;
+
+            var profile = await driverRepository.GetMyProfileAsync(userId);
+            if (profile == null) return NotFound();
+
+            return Ok(profile);
+        }
+
         [HttpPut("update-profile")]
         public async Task<IActionResult> UpdateProfile( [FromForm] UpdateDriverRequest request)
         {

@@ -120,7 +120,7 @@ namespace TaxiApp.Backend.Api.Controllers
         // ==========================
         [HttpGet("trips")]
         public async Task<IActionResult> GetTrips(
-           TripFilterDto filter)
+           [FromQuery] TripFilterDto filter)
         {
             var result = await repository.GetTripsAsync(
                 filter.Page,

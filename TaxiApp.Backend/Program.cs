@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using TaxiApp.Backend.Core.Interfaces;
@@ -122,6 +123,7 @@ namespace TaxiApp.Backend
             builder.Services.AddScoped<IComplaintRepository, ComplaintRepository>();
             builder.Services.AddScoped<ISettingsRepository, SettingsRepository>();
             builder.Services.AddScoped<IFavoriteLocationsRepository, FavoriteLocationsRepository>();
+            builder.Services.AddScoped<IMessageRepository, MessageRepository>();
             builder.Services.AddScoped<IAdminRepository, AdminRepository>();
             builder.Services.AddScoped<IAdminAssignmentRepository, AdminAssignmentRepository>();
             builder.Services.AddScoped<TripRoutingService>();
@@ -264,6 +266,18 @@ namespace TaxiApp.Backend
 
             app.UseHttpsRedirection();
             app.UseCors("AllowAll");
+
+            // Serves uploaded profile/vehicle/document photos (saved by FileService to
+            // the content-root "Images" folder) at /images/{fileName}. There was no
+            // static-file middleware registered at all before this, so every uploaded
+            // image was unreachable over HTTP.
+            var imagesPath = Path.Combine(builder.Environment.ContentRootPath, "Images");
+            Directory.CreateDirectory(imagesPath);
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(imagesPath),
+                RequestPath = "/images"
+            });
 
             app.UseAuthentication();
             app.UseRateLimiter();

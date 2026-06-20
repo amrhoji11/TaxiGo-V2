@@ -13,6 +13,7 @@ namespace TaxiApp.Backend.Core.Interfaces
     {
         Task<bool> UpdateDriverProfileAsync(string userId, UpdateDriverRequest request);
         Task<List<DriverTripReportDto>> GetDriverTripsReportAsync(string driverId, DateTime? from, DateTime? to);
+        Task<DriverProfileDto?> GetMyProfileAsync(string userId);
        
     }
 }

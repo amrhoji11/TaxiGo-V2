@@ -71,6 +71,118 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
 
         }
 
+        public async Task<PagedResult<OrderDto>> GetOrdersForPassengerAsync(
+            string passengerId, int pageNumber, int pageSize, DateTime? fromDate, DateTime? toDate)
+        {
+            var query = context.Orders
+                .Where(o => o.PassengerId == passengerId &&
+                            (!fromDate.HasValue || o.CreatedAt >= fromDate.Value) &&
+                            (!toDate.HasValue || o.CreatedAt <= toDate.Value))
+                .OrderByDescending(o => o.CreatedAt);
+
+            var totalCount = await query.CountAsync();
+
+            var ratings = context.Ratings.AsQueryable();
+
+            var data = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(o => new OrderDto
+                {
+                    OrderId = o.OrderId,
+                    PickupLat = o.PickupLat,
+                    PickupLng = o.PickupLng,
+                    PickupLocation = o.PickupLocation,
+                    DropoffLat = o.DropoffLat,
+                    DropoffLng = o.DropoffLng,
+                    DropoffLocation = o.DropoffLocation,
+                    PassengerCount = o.PassengerCount,
+                    Priority = o.Priority,
+                    RequiredVehicleSize = o.RequiredVehicleSize,
+                    Status = o.Status,
+                    TripId = o.TripOrders
+                        .Where(t => t.StatusInTrip != TripOrderStatus.Unassigned)
+                        .OrderByDescending(t => t.AssignedAt)
+                        .Select(t => t.TripId)
+                        .FirstOrDefault(),
+                    Rating = ratings
+                        .Where(r => r.OrderId == o.OrderId)
+                        .Select(r => new OrderRatingDto { Stars = (int?)r.Stars, Comment = r.Comment })
+                        .FirstOrDefault(),
+                    CreatedAt = o.CreatedAt
+                })
+                .ToListAsync();
+
+            return new PagedResult<OrderDto>
+            {
+                TotalCount = totalCount,
+                Page = pageNumber,
+                PageSize = pageSize,
+                Data = data
+            };
+        }
+
+        public async Task<OrderDetailDto?> GetOrderDetailAsync(string passengerId, int orderId)
+        {
+            var order = await context.Orders
+                .Include(o => o.TripOrders)
+                    .ThenInclude(to => to.Trip)
+                        .ThenInclude(t => t.Driver)
+                            .ThenInclude(d => d.User)
+                .Include(o => o.TripOrders)
+                    .ThenInclude(to => to.Trip)
+                        .ThenInclude(t => t.Driver)
+                            .ThenInclude(d => d.Vehicles)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId && o.PassengerId == passengerId);
+
+            if (order == null)
+                return null;
+
+            var activeTripOrder = order.TripOrders
+                .Where(to => to.StatusInTrip != TripOrderStatus.Unassigned)
+                .OrderByDescending(to => to.AssignedAt)
+                .FirstOrDefault();
+
+            var trip = activeTripOrder?.Trip;
+            var driver = trip?.Driver;
+            var vehicle = driver?.Vehicles.FirstOrDefault(v => v.IsCurrent);
+
+            var rating = await context.Ratings
+                .Where(r => r.OrderId == orderId)
+                .Select(r => new OrderRatingDto { Stars = (int?)r.Stars, Comment = r.Comment })
+                .FirstOrDefaultAsync();
+
+            return new OrderDetailDto
+            {
+                OrderId = order.OrderId,
+                PickupLat = order.PickupLat,
+                PickupLng = order.PickupLng,
+                PickupLocation = order.PickupLocation,
+                DropoffLat = order.DropoffLat,
+                DropoffLng = order.DropoffLng,
+                DropoffLocation = order.DropoffLocation,
+                PassengerCount = order.PassengerCount,
+                Priority = order.Priority,
+                RequiredVehicleSize = order.RequiredVehicleSize,
+                Status = order.Status,
+                CreatedAt = order.CreatedAt,
+                Rating = rating,
+
+                TripId = trip?.TripId,
+                TripStatus = trip?.Status,
+                DriverId = driver?.UserId,
+                DriverName = driver?.User != null ? $"{driver.User.FirstName} {driver.User.LastName}" : null,
+                DriverProfilePhotoUrl = driver?.ProfilePhotoUrl,
+                DriverLastLat = driver?.LastLat,
+                DriverLastLng = driver?.LastLng,
+                VehiclePlateNumber = vehicle?.PlateNumber,
+                VehicleMake = vehicle?.Make,
+                VehicleModel = vehicle?.Model,
+                VehicleColor = vehicle?.Color,
+                VehicleSeats = vehicle?.Seats
+            };
+        }
+
         public async Task<string> EditOrder(string userId,int id ,EditOrderDto dto)
         {
             var OrderInDb = await context.Orders.FirstOrDefaultAsync(a=>a.PassengerId==userId && a.OrderId==id);

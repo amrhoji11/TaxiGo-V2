@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using TaxiApp.Backend.Core.DTO_S;
 using TaxiApp.Backend.Core.Interfaces;
 using TaxiApp.Backend.Core.Models;
 using TaxiApp.Backend.Infrastructure.Data;
@@ -208,6 +209,39 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             await _context.SaveChangesAsync();
 
             return true;
+        }
+
+        public async Task<PagedResult<NotificationDto>> GetUserNotificationsAsync(string userId, int pageNumber, int pageSize)
+        {
+            var query = _context.Notifications
+                .Where(n => n.UserId == userId)
+                .OrderByDescending(n => n.CreatedAt);
+
+            var totalCount = await query.CountAsync();
+
+            var data = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(n => new NotificationDto
+                {
+                    NotificationId = n.NotificationId,
+                    Type = n.Type,
+                    OrderId = n.OrderId,
+                    TripId = n.TripId,
+                    Title = n.Title,
+                    Body = n.Body,
+                    CreatedAt = n.CreatedAt,
+                    IsRead = n.IsRead
+                })
+                .ToListAsync();
+
+            return new PagedResult<NotificationDto>
+            {
+                TotalCount = totalCount,
+                Page = pageNumber,
+                PageSize = pageSize,
+                Data = data
+            };
         }
 
 

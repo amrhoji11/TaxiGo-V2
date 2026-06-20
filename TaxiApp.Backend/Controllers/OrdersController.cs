@@ -47,7 +47,9 @@ namespace TaxiApp.Backend.Api.Controllers
             {
                 return BadRequest(result);
             }
-            return Ok(result.Adapt<ResponseCreateOrderDto>());
+
+            var detail = await orderRepository.GetOrderDetailAsync(PassengerId, result.OrderId);
+            return Ok(detail);
 
 
         }
@@ -66,18 +68,24 @@ namespace TaxiApp.Backend.Api.Controllers
                 return BadRequest("fromDate must be less than or equal to toDate");
             }
 
-            var result = await orderRepository.GetAll(a=>a.PassengerId == passengerId &&
-            (!fromDate.HasValue || a.CreatedAt >= fromDate.Value) &&
-            (!toDate.HasValue || a.CreatedAt <= toDate.Value),
-                                                      includes: null,  // أو يمكنك إضافة includes إذا تريد جلب العلاقات
-                                                      isTracked: false,
-                                                      pageNumber: pageNumber,
-                                                      pageSize: pageSize);
-            if (result==null)
+            var result = await orderRepository.GetOrdersForPassengerAsync(passengerId, pageNumber, pageSize, fromDate, toDate);
+            return Ok(result);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetOrderById([FromRoute] int id)
+        {
+            var passengerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            var accessCheck = await CheckUserAccessAsync(passengerId);
+            if (accessCheck != null) return accessCheck;
+
+            var result = await orderRepository.GetOrderDetailAsync(passengerId, id);
+            if (result == null)
             {
                 return NotFound();
             }
-            return Ok(result.Adapt<IEnumerable<ResponseCreateOrderDto>>());
+            return Ok(result);
         }
 
         [HttpPut("{id}")]

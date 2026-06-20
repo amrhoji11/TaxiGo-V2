@@ -1455,6 +1455,88 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             return "Entered successfully";
         }
 
+        public async Task<DriverActiveStateDto> GetActiveStateAsync(string driverId)
+        {
+            const int offerWindowSeconds = 180;
+
+            var trip = await _context.Trips
+                .Include(t => t.TripOrders)
+                    .ThenInclude(to => to.Order)
+                        .ThenInclude(o => o.Passenger)
+                            .ThenInclude(p => p.User)
+                .Where(t => t.DriverId == driverId &&
+                            (t.Status == TripStatus.Assigned || t.Status == TripStatus.InProgress))
+                .FirstOrDefaultAsync();
+
+            if (trip != null)
+            {
+                var stops = trip.TripOrders
+                    .Where(to => to.StatusInTrip != TripOrderStatus.Cancelled)
+                    .OrderBy(to => to.AssignedAt)
+                    .Select(to => new DriverTripStopDto
+                    {
+                        OrderId = to.OrderId,
+                        StatusInTrip = to.StatusInTrip,
+                        PickupLat = to.Order.PickupLat,
+                        PickupLng = to.Order.PickupLng,
+                        PickupLocation = to.Order.PickupLocation,
+                        DropoffLat = to.Order.DropoffLat,
+                        DropoffLng = to.Order.DropoffLng,
+                        DropoffLocation = to.Order.DropoffLocation,
+                        PassengerCount = to.Order.PassengerCount,
+                        PassengerName = to.Order.Passenger.User.FirstName + " " + to.Order.Passenger.User.LastName,
+                        PassengerPhone = to.Order.Passenger.User.PhoneNumber,
+                        PassengerProfilePhotoUrl = to.Order.Passenger.ProfilePhotoUrl
+                    })
+                    .ToList();
+
+                return new DriverActiveStateDto
+                {
+                    State = DriverActiveStateType.OnTrip,
+                    Trip = new DriverActiveTripDto
+                    {
+                        TripId = trip.TripId,
+                        Status = trip.Status,
+                        AssignedAt = trip.AssignedAt,
+                        StartTime = trip.StartTime,
+                        Stops = stops
+                    }
+                };
+            }
+
+            var now = DateTime.UtcNow;
+            var offerOrder = await _context.Orders
+                .FirstOrDefaultAsync(o =>
+                    o.LastOfferedDriverId == driverId &&
+                    o.Status == OrderStatus.SearchingDriver &&
+                    o.TripOfferSentAt != null);
+
+            if (offerOrder != null &&
+                (now - offerOrder.TripOfferSentAt!.Value).TotalSeconds <= offerWindowSeconds)
+            {
+                return new DriverActiveStateDto
+                {
+                    State = DriverActiveStateType.OfferPending,
+                    Offer = new DriverOrderOfferDto
+                    {
+                        OrderId = offerOrder.OrderId,
+                        PickupLat = offerOrder.PickupLat,
+                        PickupLng = offerOrder.PickupLng,
+                        PickupLocation = offerOrder.PickupLocation,
+                        DropoffLat = offerOrder.DropoffLat,
+                        DropoffLng = offerOrder.DropoffLng,
+                        DropoffLocation = offerOrder.DropoffLocation,
+                        PassengerCount = offerOrder.PassengerCount,
+                        Priority = offerOrder.Priority,
+                        RequiredVehicleSize = offerOrder.RequiredVehicleSize,
+                        OfferExpiresAt = offerOrder.TripOfferSentAt.Value.AddSeconds(offerWindowSeconds)
+                    }
+                };
+            }
+
+            return new DriverActiveStateDto { State = DriverActiveStateType.Idle };
+        }
+
         // Helpers
         // ==========================
         private Vehicle? GetActiveVehicle(Driver driver)
@@ -1771,10 +1853,10 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
 
             await _context.SaveChangesAsync();
 
-            if (trip.TripOrders.Count > 1)
-            {
-                await _tripRoutingService.RecalculateTripAsync(trip.TripId);
-            }
+            // Recalculate unconditionally, not just for shared trips —
+            // BuildSharedTripRoute now plans the dropoff leg too, and that
+            // leg only exists once the order is actually picked up.
+            await _tripRoutingService.RecalculateTripAsync(trip.TripId);
 
             // ✅ إشعار الراكب
             await _notification.SendNotificationAsync(

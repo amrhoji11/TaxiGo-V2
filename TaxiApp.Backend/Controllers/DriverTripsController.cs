@@ -28,6 +28,18 @@ namespace TaxiApp.Backend.Api.Controllers
             this.orderRepository = orderRepository;
             this.mapService = mapService;
         }
+        [HttpGet("active")]
+        public async Task<IActionResult> GetActiveState()
+        {
+            var driverId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            var accessCheck = await CheckUserAccessAsync(driverId);
+            if (accessCheck != null) return accessCheck;
+
+            var state = await driverAssignment.GetActiveStateAsync(driverId);
+            return Ok(state);
+        }
+
         [EnableRateLimiting("DriverActionsPolicy")]
         [HttpPost("accept-order/{orderId}")]
         public async Task<IActionResult> AcceptOrder([FromRoute] int orderId)

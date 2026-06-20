@@ -76,6 +76,18 @@ namespace TaxiApp.Backend.Infrastructure.Helper
                     Dropoffs = result.Steps.Where(x => !x.IsPickup)
                 });
 
+            // Passenger-safe subset only — Steps/Pickups/Dropoffs carry
+            // every stop's passenger name, which would leak a
+            // co-passenger's identity/location on a shared trip. The
+            // passenger side only ever needs the line itself and the ETA.
+            await _hub.Clients
+                .Group($"trip-{tripId}")
+                .SendAsync("RouteUpdated", new
+                {
+                    polyline = result.Polyline,
+                    totalMinutes = result.TotalMinutes
+                });
+
             return result;
         }
 
@@ -96,18 +108,39 @@ namespace TaxiApp.Backend.Infrastructure.Helper
             double currentLng = (double)driver.LastLng!;
 
             var steps = new List<RouteStepDto>();
-            var remaining = tripOrders.ToList();
+            var ordersById = tripOrders.ToDictionary(x => x.OrderId);
+
+            // Each order contributes its remaining legs *in order*: pickup
+            // (only if not already picked up) then dropoff. Tracked as two
+            // separate sets rather than deriving "is this a pickup or
+            // dropoff candidate" from the order's real `StatusInTrip` —
+            // that field never changes mid-loop (this method only plans,
+            // it doesn't persist), so a single pass could never place both
+            // legs for the same not-yet-picked-up order; it would visit
+            // the pickup, immediately drop the order from consideration,
+            // and never plan the dropoff leg at all.
+            var pendingPickups = tripOrders
+                .Where(x => x.StatusInTrip != TripOrderStatus.PickedUp)
+                .Select(x => x.OrderId)
+                .ToHashSet();
+            var pendingDropoffs = tripOrders.Select(x => x.OrderId).ToHashSet();
 
             int seq = 0;
 
-            while (remaining.Any())
+            while (pendingPickups.Count > 0 || pendingDropoffs.Count > 0)
             {
                 RouteStepDto best = null;
                 double bestTime = double.MaxValue;
 
-                foreach (var o in remaining)
+                foreach (var orderId in pendingPickups.Union(pendingDropoffs))
                 {
-                    var isPickup = o.StatusInTrip != TripOrderStatus.PickedUp;
+                    // An order's dropoff can never be visited before its
+                    // own pickup within this same planning pass.
+                    var isPickup = pendingPickups.Contains(orderId);
+                    if (!isPickup && !pendingDropoffs.Contains(orderId))
+                        continue;
+
+                    var o = ordersById[orderId];
 
                     var lat = isPickup ? o.Order.PickupLat : o.Order.DropoffLat;
                     var lng = isPickup ? o.Order.PickupLng : o.Order.DropoffLng;
@@ -147,12 +180,10 @@ namespace TaxiApp.Backend.Infrastructure.Helper
                 currentLat = best.Lat;
                 currentLng = best.Lng;
 
-                // remove processed
-                remaining = remaining
-                    .Where(x => !(x.OrderId == best.OrderId &&
-                                 ((best.IsPickup && x.StatusInTrip != TripOrderStatus.PickedUp) ||
-                                  (!best.IsPickup && x.StatusInTrip == TripOrderStatus.PickedUp))))
-                    .ToList();
+                if (best.IsPickup)
+                    pendingPickups.Remove(best.OrderId);
+                else
+                    pendingDropoffs.Remove(best.OrderId);
             }
 
             return steps;

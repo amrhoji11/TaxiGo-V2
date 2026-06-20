@@ -22,6 +22,19 @@ namespace TaxiApp.Backend.Api.Controllers
             this.passengerRepository = passengerRepository;
         }
 
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var accessCheck = await CheckUserAccessAsync(userId);
+            if (accessCheck != null) return accessCheck;
+
+            var profile = await passengerRepository.GetMyProfileAsync(userId);
+            if (profile == null) return NotFound("المستخدم غير موجود");
+
+            return Ok(profile);
+        }
+
         [HttpPut("update-profile")]
         public async Task<IActionResult> UpdateProfile( [FromForm] UpdatePassengerRequest request)
         {

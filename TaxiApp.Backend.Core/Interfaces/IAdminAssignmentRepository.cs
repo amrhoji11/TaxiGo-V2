@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TaxiApp.Backend.Core.DTO_S;
 using TaxiApp.Backend.Core.Models;
 
 namespace TaxiApp.Backend.Core.Interfaces
@@ -13,5 +14,6 @@ namespace TaxiApp.Backend.Core.Interfaces
         Task<string> ManualAssignTripAsync(int tripId, string driverId);
         Task<SystemMode> GetModeAsync();
         Task<string> SetModeAsync(SystemMode mode);
+        Task<List<AssignableDriverDto>> GetAssignableDriversAsync();
     }
 }

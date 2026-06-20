@@ -219,7 +219,10 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             return new PassengerProfileDto
             {
                 Id = passenger.UserId,
+                FirstName = passenger.User.FirstName,
+                LastName = passenger.User.LastName,
                 FullName = passenger.User.FirstName + " " + passenger.User.LastName,
+                Address = passenger.User.Address,
                 PhoneNumber = passenger.User.PhoneNumber,
                 ProfileImageUrl = passenger.ProfilePhotoUrl
             };
@@ -304,9 +307,15 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
 
                     PassengerName = o.Passenger.User.FirstName + " " + o.Passenger.User.LastName,
 
+                    PickupLat = o.PickupLat,
+                    PickupLng = o.PickupLng,
                     PickupLocation = o.PickupLocation,
+                    DropoffLat = o.DropoffLat,
+                    DropoffLng = o.DropoffLng,
                     DropoffLocation = o.DropoffLocation,
                     PassengerCount = o.PassengerCount,
+                    Priority = o.Priority,
+                    RequiredVehicleSize = o.RequiredVehicleSize,
                     Status = o.Status,
 
                     TripId = o.TripOrders

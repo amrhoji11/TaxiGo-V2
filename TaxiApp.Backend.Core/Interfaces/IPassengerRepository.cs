@@ -14,6 +14,7 @@ namespace TaxiApp.Backend.Core.Interfaces
         Task<string> RateDriverAsync(int tripId, string passengerId, int stars, string? comment);
         Task<List<PassengerTripReportDto>> GetPassengerTripsReportAsync(
     string passengerId, DateTime from, DateTime to);
+        Task<PassengerProfileDto?> GetMyProfileAsync(string userId);
 
 
        

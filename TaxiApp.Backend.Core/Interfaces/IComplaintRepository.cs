@@ -12,13 +12,13 @@ namespace TaxiApp.Backend.Core.Interfaces
     {
         Task<string> CreateComplaintAsync(string userId, int orderId, CreateComplaintDto dto);
 
-        Task<List<Complaint>> GetAllComplaintsAsync();
+        Task<List<ComplaintDto>> GetAllComplaintsAsync();
 
         Task<string> UpdateStatusAsync(int ComplaintId, UpdateComplaintStatusDto dto);
 
         Task<int> GetDriverViolationsCountAsync(string driverId);
 
-        Task<List<Violation>> GetAllViolationsAsync();
+        Task<List<ViolationDto>> GetAllViolationsAsync();
         Task<string> ResolveViolationAsync(int violationId);
             
             

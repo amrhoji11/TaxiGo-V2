@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TaxiApp.Backend.Core.DTO_S;
 using TaxiApp.Backend.Core.Interfaces;
 using TaxiApp.Backend.Core.Models;
 using TaxiApp.Backend.Infrastructure.Data;
@@ -154,6 +155,22 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
             _cache.Set(CACHE_KEY, mode);
 
             return $"System switched to {mode}";
+        }
+
+        public async Task<List<AssignableDriverDto>> GetAssignableDriversAsync()
+        {
+            return await _context.Drivers
+                .Include(d => d.User)
+                .Where(d => !d.IsDeleted && d.Status != DriverStatus.rejected)
+                .OrderBy(d => d.Status)
+                .Select(d => new AssignableDriverDto
+                {
+                    UserId = d.UserId,
+                    FullName = d.User.FirstName + " " + d.User.LastName,
+                    PhoneNumber = d.User.PhoneNumber,
+                    Status = d.Status
+                })
+                .ToListAsync();
         }
 
         private async Task SendTripOfferForWholeTrip(Trip trip, string driverId)

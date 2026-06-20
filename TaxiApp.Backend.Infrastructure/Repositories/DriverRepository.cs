@@ -153,6 +153,42 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
         }
 
 
-       
+        public async Task<DriverProfileDto?> GetMyProfileAsync(string userId)
+        {
+            var driver = await context.Drivers
+                .Include(d => d.User)
+                .Include(d => d.Vehicles)
+                .FirstOrDefaultAsync(d => d.UserId == userId && !d.IsDeleted);
+
+            if (driver == null) return null;
+
+            var approval = await context.DriverApprovals
+                .FirstOrDefaultAsync(a => a.DriverId == userId);
+
+            var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsCurrent && v.IsActive);
+
+            var isInQueue = await context.OfficeQueueEntries
+                .AnyAsync(q => q.DriverId == userId && q.Status == QueueStatus.InQueue);
+
+            return new DriverProfileDto
+            {
+                UserId = driver.UserId,
+                FirstName = driver.User.FirstName,
+                LastName = driver.User.LastName,
+                FullName = driver.User.FirstName + " " + driver.User.LastName,
+                PhoneNumber = driver.User.PhoneNumber,
+                Address = driver.User.Address,
+                ProfilePhotoUrl = driver.ProfilePhotoUrl,
+                Status = driver.Status,
+                IsInQueue = isInQueue,
+                ApprovalStatus = approval?.Status ?? ApprovalStatus.pending,
+                VehiclePlateNumber = vehicle?.PlateNumber,
+                VehicleSize = vehicle?.VehicleSize,
+                VehicleSeats = vehicle?.Seats,
+                VehicleMake = vehicle?.Make,
+                VehicleModel = vehicle?.Model,
+                VehicleColor = vehicle?.Color
+            };
+        }
     }
 }

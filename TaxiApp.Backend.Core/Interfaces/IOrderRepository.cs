@@ -13,5 +13,10 @@ namespace TaxiApp.Backend.Core.Interfaces
         Task<Order> CreateOrder(string userId,CreateOrderDto dto);
         Task<string> EditOrder( string userId,int id,EditOrderDto dto);
         Task<string> CancelOrder(string userId,int id);
+
+        Task<PagedResult<OrderDto>> GetOrdersForPassengerAsync(
+            string passengerId, int pageNumber, int pageSize, DateTime? fromDate, DateTime? toDate);
+
+        Task<OrderDetailDto?> GetOrderDetailAsync(string passengerId, int orderId);
     }
 }

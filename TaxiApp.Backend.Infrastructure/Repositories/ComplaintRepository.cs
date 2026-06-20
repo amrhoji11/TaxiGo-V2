@@ -106,12 +106,54 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
         // =========================
         // GET ALL
         // =========================
-        public async Task<List<Complaint>> GetAllComplaintsAsync()
+        public async Task<List<ComplaintDto>> GetAllComplaintsAsync()
         {
-            return await _context.Complaints
+            var complaints = await _context.Complaints
                 .Include(c => c.Violation)
                 .OrderByDescending(c => c.CreatedAt)
                 .ToListAsync();
+
+            var userIds = complaints
+                .Select(c => c.SenderId)
+                .Concat(complaints.Where(c => c.AgainstUserId != null).Select(c => c.AgainstUserId))
+                .Distinct()
+                .ToList();
+
+            var names = await _context.Users
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })
+                .ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+            return complaints.Select(c => new ComplaintDto
+            {
+                Id = c.Id,
+                SenderId = c.SenderId,
+                SenderName = names.GetValueOrDefault(c.SenderId, "Unknown"),
+                AgainstUserId = c.AgainstUserId,
+                AgainstUserName = c.AgainstUserId != null ? names.GetValueOrDefault(c.AgainstUserId, "Unknown") : null,
+                OrderId = c.OrderId,
+                TripId = c.TripId,
+                ReasonType = c.ReasonType,
+                TargetType = c.TargetType,
+                Description = c.Description,
+                Status = c.Status,
+                CreatedAt = c.CreatedAt,
+                ResolvedAt = c.ResolvedAt,
+                ViolationId = c.ViolationId,
+                Violation = c.Violation == null ? null : new ViolationDto
+                {
+                    Id = c.Violation.Id,
+                    DriverId = c.Violation.DriverId,
+                    DriverName = names.GetValueOrDefault(c.Violation.DriverId, "Unknown"),
+                    OrderId = c.Violation.OrderId,
+                    TripId = c.Violation.TripId,
+                    Type = c.Violation.Type,
+                    Status = c.Violation.Status,
+                    Reason = c.Violation.Reason,
+                    ResolvedAt = c.Violation.ResolvedAt,
+                    CreatedAt = c.Violation.CreatedAt
+                }
+            }).ToList();
         }
 
         // =========================
@@ -207,11 +249,32 @@ namespace TaxiApp.Backend.Infrastructure.Repositories
         // =========================
         // GET VIOLATIONS
         // =========================
-        public async Task<List<Violation>> GetAllViolationsAsync()
+        public async Task<List<ViolationDto>> GetAllViolationsAsync()
         {
-            return await _context.Violations
+            var violations = await _context.Violations
                 .OrderByDescending(v => v.CreatedAt)
                 .ToListAsync();
+
+            var driverIds = violations.Select(v => v.DriverId).Distinct().ToList();
+
+            var names = await _context.Users
+                .Where(u => driverIds.Contains(u.Id))
+                .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })
+                .ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+            return violations.Select(v => new ViolationDto
+            {
+                Id = v.Id,
+                DriverId = v.DriverId,
+                DriverName = names.GetValueOrDefault(v.DriverId, "Unknown"),
+                OrderId = v.OrderId,
+                TripId = v.TripId,
+                Type = v.Type,
+                Status = v.Status,
+                Reason = v.Reason,
+                ResolvedAt = v.ResolvedAt,
+                CreatedAt = v.CreatedAt
+            }).ToList();
         }
 
 

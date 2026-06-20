@@ -46,5 +46,12 @@ namespace TaxiApp.Backend.Api.Controllers
             var mode = await _repo.GetModeAsync();
             return Ok(mode);
         }
+
+        [HttpGet("assignable-drivers")]
+        public async Task<IActionResult> GetAssignableDrivers()
+        {
+            var drivers = await _repo.GetAssignableDriversAsync();
+            return Ok(drivers);
+        }
     }
 }
